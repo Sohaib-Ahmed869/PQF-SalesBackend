@@ -1,0 +1,229 @@
+<!-- templates/quotation-pdf-template-simple.html -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>DEVIS 27</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #333;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      .company-name {
+        color: #dc2626;
+        font-size: 24px;
+        font-weight: bold;
+      }
+      .devis-title {
+        background-color: #1f2937;
+        color: white;
+        padding: 10px 15px;
+        display: inline-block;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background-color: #1f2937;
+        color: white;
+      }
+      .red-header {
+        background-color: #dc2626;
+      }
+      .total-row {
+        background-color: #dc2626;
+        color: white;
+        font-weight: bold;
+      }
+      .footer {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding-top: 20px;
+        margin-top: 40px;
+        border-top: 1px solid #ddd;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div>
+        <img
+          src="https://imageshfs.s3.ap-southeast-2.amazonaws.com/image-removebg-preview+(1).png"
+          alt="Logo HFS"
+          style="width: 150px; height: auto"
+        />
+      </div>
+ 
+    </div>
+
+    <div
+      style="display: flex; justify-content: space-between; margin-bottom: 30px"
+    >
+      <div style="width: 48%">
+        <p>
+          32, Rue Raspail<br />
+          93120 La Courneuve<br />
+          France
+        </p>
+        <p>
+          <strong>Représentant Commercial :</strong>
+          
+          <br />
+          <strong>Date du devis:</strong> 26-06-2025<br />
+          <strong>Date de validité du devis:</strong>
+          26-07-2025
+        </p>
+      </div>
+      <!-- Update this part in quotation-pdf-template-simple.html -->
+      <!-- In quotation-pdf-template-simple.html, update the customer info section -->
+      <div style="width: 48%; text-align: right">
+        <div class="company-name">Premier food (halal courses)</div>
+        <p>
+          55 avenue marceau<br /> 75116 paris<br />  
+        </p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Référence</th>
+          <th style="text-align: right">Prix Unitaire HT</th>
+          <th style="text-align: center">Quantité</th>
+          <th class="red-header" style="text-align: right">Total HT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Filet de poulet frais x kg</td>
+          <td>vo01</td>
+          <td class="price-right">8.11 €</td>
+          <td class="quantity-center">1</td>
+          <td class="price-right">8.11 €</td>
+        </tr>
+        <tr>
+          <td>chicken seekh kebab x 15 pcs</td>
+          <td>vo02</td>
+          <td class="price-right">13.00 €</td>
+          <td class="quantity-center">1</td>
+          <td class="price-right">13.00 €</td>
+        </tr>
+        <tr>
+          <td>CUISSE DE POULET SANS OS SANS PEAU x 10 kg CONGELE</td>
+          <td>vo03</td>
+          <td class="price-right">42.00 €</td>
+          <td class="quantity-center">1</td>
+          <td class="price-right">42.00 €</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="width: 40%; margin-left: auto">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #ddd;
+        "
+      >
+        <span>Total Produits (HT) :</span>
+        <span style="font-weight: bold">63.11 €</span>
+      </div>
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #ddd;
+        "
+      >
+        <span>Frais de Livraison :</span>
+        <span style="font-weight: bold">0,00 €</span>
+      </div>
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #ddd;
+        "
+      >
+        <span>Sous-Total (HT) :</span>
+        <span style="font-weight: bold">63.11 €</span>
+      </div>
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #ddd;
+        "
+      >
+        <span>TVA :</span>
+        <span style="font-weight: bold">3.47 €</span>
+      </div>
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          padding: 10px 8px;
+          background-color: #dc2626;
+          color: white;
+          font-weight: bold;
+          margin-top: 4px;
+        "
+      >
+        <span>Total TTC :</span>
+        <span>66.58 €</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>
+        <strong>Halal Food Service</strong><br />
+        Siège : 38 RUE DE BERRI, 75000 Paris, FRANCE<br />
+        N°Siren : 798545448 | N°TVA inta : FR02798545448
+      </p>
+
+      <p>
+        <strong>Contact:</strong> +33 1 79 64 84 05 | commande@halalfs.com
+        | www.HalalFS.com
+      </p>
+
+      <p>
+        <strong>Détails Bancaires:</strong> BRED BANQUE POPULAIRE | IBAN:
+        FR7610107006090001804792320 | SWIFT/BIC: BREDFRPPXXX
+      </p>
+    </div>
+
+    <div
+      style="
+        text-align: center;
+        margin-top: 20px;
+        font-size: 12px;
+        color: #6b7280;
+      "
+    >
+      PAGE 1 SUR 1
+    </div>
+  </body>
+</html>
