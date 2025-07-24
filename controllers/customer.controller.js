@@ -4873,7 +4873,7 @@ exports.removeCustomersWithSCardCode = async (req, res) => {
 
     // Step 1: Find all customers with CardCode starting with "S"
     const sCustomersQuery = {
-      CardCode: { $regex: /^S/, $options: "i" }, // Case-insensitive match for CardCodes starting with S
+      CardCode: { $regex: /^S\d{4}$/, $options: "i" },
     };
 
     // Step 2: Count customers first for logging
@@ -4976,7 +4976,7 @@ exports.previewCustomersWithSCardCode = async (req, res) => {
     );
 
     const sCustomersQuery = {
-      CardCode: { $regex: /^S/, $options: "i" },
+      CardCode: { $regex: /^S\d{4}$/, $options: "i" },
     };
 
     const count = await Customer.countDocuments(sCustomersQuery);

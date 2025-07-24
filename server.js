@@ -65,6 +65,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://halalfoodsales.s3-website.eu-north-1.amazonaws.com",
+      "https://sales.foodservices.live",
     ],
   })
 );
