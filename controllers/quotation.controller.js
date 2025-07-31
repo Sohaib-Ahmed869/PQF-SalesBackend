@@ -100,7 +100,7 @@ exports.generatePaymentLinkForQuotation = async (req, res) => {
       reference: `QT-${quotation.DocNum}`,
       amount: {
         value: Math.round(quotation.DocTotal * 100),
-        currency: quotation.DocCurrency || "EUR",
+        currency: quotation.DocCurrency || "AED",
       },
       description: `Payment for Quotation #${quotation.DocNum}`,
       countryCode: "FR",

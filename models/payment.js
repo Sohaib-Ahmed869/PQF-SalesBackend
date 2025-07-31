@@ -5,6 +5,9 @@ const paymentSchema = new mongoose.Schema(
     // Core fields
     DocEntry: { type: Number, required: true, unique: true },
     DocNum: { type: Number, required: true },
+    Historical: { type: Boolean, default: false },
+    mergedFrom: { type: String }, // Original CardCode before merge
+    mergeDate: { type: Date },
     DocType: String,
     HandWritten: String,
     Printed: String,

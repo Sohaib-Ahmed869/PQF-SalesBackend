@@ -2023,6 +2023,307 @@ exports.uploadCustomersCSV = async (req, res) => {
   }
 };
 
+// exports.getCustomersPaginated = async (req, res) => {
+//   try {
+//     // Extract pagination parameters
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = parseInt(req.query.limit) || 50;
+//     const skip = (page - 1) * limit;
+
+//     //check user role
+//     if (req.user && req.user.role === "sales_agent") {
+//       // Sales agents can only see customers assigned to them
+//       req.query.assignedTo = req.user._id;
+//     }
+
+//     // Extract filtering parameters
+//     const { status, search, assignedTo, type, sortBy, sortOrder } = req.query;
+//     const query = {};
+
+//     // Apply filters if provided
+//     if (status) query.status = status;
+
+//     if (assignedTo === "unassigned") {
+//       query.assignedTo = { $exists: false }; // This properly targets documents where assignedTo field doesn't exist
+//     } else if (assignedTo !== "all" && assignedTo) {
+//       query.assignedTo = assignedTo; // Keep the existing filter for specific agents
+//     }
+
+//     // Search by name, code or email
+//     if (search) {
+//       query.$or = [
+//         { CardName: { $regex: search, $options: "i" } },
+//         { CardCode: { $regex: search, $options: "i" } },
+//         { Email: { $regex: search, $options: "i" } },
+//       ];
+//     }
+
+//     // Get all matching customers without pagination for sorting by metrics
+//     let customers = await Customer.find({ ...query })
+//       .select(
+//         "CardCode CardName Email phoneNumber status assignedTo TotalSales LastPurchaseDate notes"
+//       )
+//       .populate("assignedTo", "firstName lastName email")
+//       .lean();
+
+//     // Extract customer codes and emails for efficient batch processing
+//     const customerCodes = customers.map((c) => c.CardCode);
+//     const customerEmails = customers.filter((c) => c.Email).map((c) => c.Email);
+
+//     // Batch query for all metrics in parallel for better performance
+//     const [
+//       invoiceCounts,
+//       orderCounts,
+//       abandonedCarts,
+//       totalTurnover,
+//       salesOrderTotal,
+//       latestInvoiceDates,
+//       quotationCounts,
+//     ] = await Promise.all([
+//       // Get invoice counts for all customers at once
+//       Invoice.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $group: { _id: "$CardCode", count: { $sum: 1 } } },
+//       ]),
+
+//       // Get order counts for all customers at once
+//       SalesOrder.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $group: { _id: "$CardCode", count: { $sum: 1 } } },
+//       ]),
+
+//       // Get abandoned cart counts for all customers at once
+//       Cart.aggregate([
+//         {
+//           $match: {
+//             $or: [
+//               { customerEmail: { $in: customerEmails } },
+//               { "contactInfo.email": { $in: customerEmails } },
+//             ],
+//             status: "abandoned",
+//             isAbandoned: true,
+//           },
+//         },
+//         {
+//           $group: {
+//             _id: {
+//               $cond: [
+//                 { $ifNull: ["$customerEmail", false] },
+//                 "$customerEmail",
+//                 "$contactInfo.email",
+//               ],
+//             },
+//             count: { $sum: 1 },
+//           },
+//         },
+//       ]),
+
+//       // Get total turnover (sum of invoice amounts) for all customers
+//       Invoice.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $group: { _id: "$CardCode", totalAmount: { $sum: "$DocTotal" } } },
+//       ]),
+
+//       // Get total sales order amount for all customers
+//       SalesOrder.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $group: { _id: "$CardCode", totalAmount: { $sum: "$DocTotal" } } },
+//       ]),
+
+//       // Get latest invoice date for each customer
+//       Invoice.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $sort: { DocDate: -1 } },
+//         {
+//           $group: {
+//             _id: "$CardCode",
+//             latestInvoiceDate: { $first: "$DocDate" },
+//           },
+//         },
+//       ]),
+
+//       Quotation.aggregate([
+//         { $match: { CardCode: { $in: customerCodes } } },
+//         { $group: { _id: "$CardCode", count: { $sum: 1 } } },
+//       ]),
+//     ]);
+
+//     // Create lookup maps for O(1) access
+//     const invoiceMap = {};
+//     invoiceCounts.forEach((item) => {
+//       invoiceMap[item._id] = item.count;
+//     });
+
+//     const orderMap = {};
+//     orderCounts.forEach((item) => {
+//       orderMap[item._id] = item.count;
+//     });
+
+//     const cartMap = {};
+//     abandonedCarts.forEach((item) => {
+//       cartMap[item._id] = item.count;
+//     });
+
+//     // Create turnover map
+//     const turnoverMap = {};
+//     totalTurnover.forEach((item) => {
+//       turnoverMap[item._id] = item.totalAmount;
+//     });
+
+//     // Create sales order total map
+//     const salesOrderMap = {};
+//     salesOrderTotal.forEach((item) => {
+//       salesOrderMap[item._id] = item.totalAmount;
+//     });
+
+//     // Create latest invoice date map
+//     const latestInvoiceDateMap = {};
+//     latestInvoiceDates.forEach((item) => {
+//       latestInvoiceDateMap[item._id] = item.latestInvoiceDate;
+//     });
+
+//     const quotationMap = {};
+//     quotationCounts.forEach((item) => {
+//       quotationMap[item._id] = item.count;
+//     });
+
+//     // Helper function to check if CardCode is SAP format (starts with letter followed by numbers)
+//     const isSAPCardCode = (cardCode) => {
+//       return /^[A-Za-z]\d+$/.test(cardCode);
+//     };
+
+//     // Enhance customers with metrics
+//     const enhancedCustomers = customers.map((customer) => {
+//       return {
+//         ...customer,
+//         metrics: {
+//           invoiceCount: invoiceMap[customer.CardCode] || 0,
+//           orderCount: orderMap[customer.CardCode] || 0,
+//           abandonedCartCount: customer.Email ? cartMap[customer.Email] || 0 : 0,
+//           sapTurnover: turnoverMap[customer.CardCode] || 0,
+//           salesOrderTotal: salesOrderMap[customer.CardCode] || 0,
+//           latestInvoiceDate: latestInvoiceDateMap[customer.CardCode] || null,
+//           quotationCount: quotationMap[customer.CardCode] || 0,
+//         },
+//         isSAPCustomer: isSAPCardCode(customer.CardCode), // Add this flag for easier identification
+//       };
+//     });
+
+//     // Apply sorting based on metrics
+//     if (sortBy) {
+//       const sortDirection = sortOrder === "desc" ? -1 : 1;
+
+//       enhancedCustomers.sort((a, b) => {
+//         let aValue, bValue;
+
+//         switch (sortBy) {
+//           case "invoiceCount":
+//             aValue = a.metrics.invoiceCount;
+//             bValue = b.metrics.invoiceCount;
+//             break;
+//           case "orderCount":
+//             aValue = a.metrics.orderCount;
+//             bValue = b.metrics.orderCount;
+//             break;
+//           case "abandonedCartCount":
+//             aValue = a.metrics.abandonedCartCount;
+//             bValue = b.metrics.abandonedCartCount;
+//             break;
+//           case "sapTurnover":
+//             // For regular sapTurnover sorting (when company is not pqf or general sorting)
+//             aValue = a.metrics.sapTurnover;
+//             bValue = b.metrics.sapTurnover;
+//             break;
+//           case "historicalTurnover":
+//             // Sort only non-SAP customers by turnover, SAP customers go to bottom
+//             if (!a.isSAPCustomer && !b.isSAPCustomer) {
+//               aValue = a.metrics.sapTurnover;
+//               bValue = b.metrics.sapTurnover;
+//             } else if (!a.isSAPCustomer && b.isSAPCustomer) {
+//               return -1; // Non-SAP customer comes first
+//             } else if (a.isSAPCustomer && !b.isSAPCustomer) {
+//               return 1; // SAP customer goes after non-SAP
+//             } else {
+//               // Both are SAP customers, maintain their relative order
+//               return 0;
+//             }
+//             break;
+//           case "sapTurnoverOnly":
+//             // Sort only SAP customers by turnover, non-SAP customers go to bottom
+//             if (a.isSAPCustomer && b.isSAPCustomer) {
+//               aValue = a.metrics.sapTurnover;
+//               bValue = b.metrics.sapTurnover;
+//             } else if (a.isSAPCustomer && !b.isSAPCustomer) {
+//               return -1; // SAP customer comes first
+//             } else if (!a.isSAPCustomer && b.isSAPCustomer) {
+//               return 1; // Non-SAP customer goes after SAP
+//             } else {
+//               // Both are non-SAP customers, maintain their relative order
+//               return 0;
+//             }
+//             break;
+//           case "salesOrderTotal":
+//             aValue = a.metrics.salesOrderTotal;
+//             bValue = b.metrics.salesOrderTotal;
+//             break;
+//           case "latestInvoiceDate":
+//             aValue = a.metrics.latestInvoiceDate
+//               ? new Date(a.metrics.latestInvoiceDate).getTime()
+//               : 0;
+//             bValue = b.metrics.latestInvoiceDate
+//               ? new Date(b.metrics.latestInvoiceDate).getTime()
+//               : 0;
+//             break;
+//           case "quotationCount":
+//             aValue = a.metrics.quotationCount;
+//             bValue = b.metrics.quotationCount;
+//             break;
+//           case "CardName":
+//             return sortDirection * a.CardName.localeCompare(b.CardName);
+//           default:
+//             return 0;
+//         }
+
+//         // For cases where we have aValue and bValue
+//         if (sortBy === "historicalTurnover" || sortBy === "sapTurnoverOnly") {
+//           return sortDirection * (aValue - bValue);
+//         } else if (aValue !== undefined && bValue !== undefined) {
+//           return sortDirection * (aValue - bValue);
+//         }
+
+//         return 0;
+//       });
+//     } else {
+//       // Default sorting by CardName
+//       enhancedCustomers.sort((a, b) => a.CardName.localeCompare(b.CardName));
+//     }
+
+//     // Get the total count AFTER all filters and sorting have been applied
+//     const totalCount = enhancedCustomers.length;
+
+//     // Apply pagination after sorting
+//     const paginatedCustomers = enhancedCustomers.slice(skip, skip + limit);
+
+//     return res.status(200).json({
+//       success: true,
+//       customers: paginatedCustomers,
+//       pagination: {
+//         total: totalCount,
+//         page,
+//         pages: Math.ceil(totalCount / limit),
+//         limit,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Customer fetch error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getCustomersPaginated = async (req, res) => {
   try {
     // Extract pagination parameters
@@ -2030,7 +2331,7 @@ exports.getCustomersPaginated = async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
 
-    //check user role
+    // Check user role
     if (req.user && req.user.role === "sales_agent") {
       // Sales agents can only see customers assigned to them
       req.query.assignedTo = req.user._id;
@@ -2044,9 +2345,9 @@ exports.getCustomersPaginated = async (req, res) => {
     if (status) query.status = status;
 
     if (assignedTo === "unassigned") {
-      query.assignedTo = { $exists: false }; // This properly targets documents where assignedTo field doesn't exist
+      query.assignedTo = { $exists: false };
     } else if (assignedTo !== "all" && assignedTo) {
-      query.assignedTo = assignedTo; // Keep the existing filter for specific agents
+      query.assignedTo = assignedTo;
     }
 
     // Search by name, code or email
@@ -2070,12 +2371,18 @@ exports.getCustomersPaginated = async (req, res) => {
     const customerCodes = customers.map((c) => c.CardCode);
     const customerEmails = customers.filter((c) => c.Email).map((c) => c.Email);
 
+    // Helper function to check if CardCode is SAP format (starts with letter followed by numbers)
+    const isSAPCardCode = (cardCode) => {
+      return /^[A-Za-z]\d+$/.test(cardCode);
+    };
+
     // Batch query for all metrics in parallel for better performance
     const [
       invoiceCounts,
       orderCounts,
       abandonedCarts,
-      totalTurnover,
+      historicalTurnover,
+      sapTurnover,
       salesOrderTotal,
       latestInvoiceDates,
       quotationCounts,
@@ -2092,7 +2399,6 @@ exports.getCustomersPaginated = async (req, res) => {
         { $group: { _id: "$CardCode", count: { $sum: 1 } } },
       ]),
 
-      // Get abandoned cart counts for all customers at once
       // Get abandoned cart counts for all customers at once
       Cart.aggregate([
         {
@@ -2119,9 +2425,51 @@ exports.getCustomersPaginated = async (req, res) => {
         },
       ]),
 
-      // Get total turnover (sum of invoice amounts) for all customers
+      // Get historical turnover
+      // Scenario 1: Invoices with Historical: true (from merged customers)
+      // Scenario 2: Invoices from unmerged historical customers (non-SAP CardCode format and no Historical field)
       Invoice.aggregate([
-        { $match: { CardCode: { $in: customerCodes } } },
+        {
+          $match: {
+            CardCode: { $in: customerCodes },
+            $or: [
+              // Scenario 1: Explicitly marked as historical
+              { Historical: true },
+              // Scenario 2: Unmerged historical customers
+              // Non-SAP format AND no Historical field (meaning it's an unmerged historical customer)
+              {
+                $and: [
+                  { Historical: { $exists: false } },
+                  { CardCode: { $not: /^[A-Za-z]\d+$/ } }, // Not SAP format
+                ],
+              },
+            ],
+          },
+        },
+        { $group: { _id: "$CardCode", totalAmount: { $sum: "$DocTotal" } } },
+      ]),
+
+      // Get SAP turnover
+      // Scenario 1: Invoices with Historical: false (from merged customers)
+      // Scenario 3: Invoices from pure SAP customers (SAP CardCode format and no Historical field)
+      Invoice.aggregate([
+        {
+          $match: {
+            CardCode: { $in: customerCodes },
+            $or: [
+              // Scenario 1: Explicitly marked as SAP (not historical)
+              { Historical: false },
+              // Scenario 3: Pure SAP customers
+              // SAP format AND no Historical field (meaning it's a pure SAP customer)
+              {
+                $and: [
+                  { Historical: { $exists: false } },
+                  { CardCode: /^[A-Za-z]\d+$/ }, // SAP format
+                ],
+              },
+            ],
+          },
+        },
         { $group: { _id: "$CardCode", totalAmount: { $sum: "$DocTotal" } } },
       ]),
 
@@ -2131,7 +2479,7 @@ exports.getCustomersPaginated = async (req, res) => {
         { $group: { _id: "$CardCode", totalAmount: { $sum: "$DocTotal" } } },
       ]),
 
-      // Get latest invoice date for each customer
+      // Get latest invoice date for each customer (from all invoices regardless of type)
       Invoice.aggregate([
         { $match: { CardCode: { $in: customerCodes } } },
         { $sort: { DocDate: -1 } },
@@ -2143,6 +2491,7 @@ exports.getCustomersPaginated = async (req, res) => {
         },
       ]),
 
+      // Get quotation counts for all customers
       Quotation.aggregate([
         { $match: { CardCode: { $in: customerCodes } } },
         { $group: { _id: "$CardCode", count: { $sum: 1 } } },
@@ -2165,10 +2514,16 @@ exports.getCustomersPaginated = async (req, res) => {
       cartMap[item._id] = item.count;
     });
 
-    // Create turnover map
-    const turnoverMap = {};
-    totalTurnover.forEach((item) => {
-      turnoverMap[item._id] = item.totalAmount;
+    // Create historical turnover map
+    const historicalTurnoverMap = {};
+    historicalTurnover.forEach((item) => {
+      historicalTurnoverMap[item._id] = item.totalAmount;
+    });
+
+    // Create SAP turnover map
+    const sapTurnoverMap = {};
+    sapTurnover.forEach((item) => {
+      sapTurnoverMap[item._id] = item.totalAmount;
     });
 
     // Create sales order total map
@@ -2190,17 +2545,30 @@ exports.getCustomersPaginated = async (req, res) => {
 
     // Enhance customers with metrics
     const enhancedCustomers = customers.map((customer) => {
+      const historicalAmount = historicalTurnoverMap[customer.CardCode] || 0;
+      const sapAmount = sapTurnoverMap[customer.CardCode] || 0;
+      const isSAP = isSAPCardCode(customer.CardCode);
+
       return {
         ...customer,
         metrics: {
           invoiceCount: invoiceMap[customer.CardCode] || 0,
           orderCount: orderMap[customer.CardCode] || 0,
           abandonedCartCount: customer.Email ? cartMap[customer.Email] || 0 : 0,
-          sapTurnover: turnoverMap[customer.CardCode] || 0,
+          historicalTurnover: historicalAmount,
+          sapTurnover: sapAmount,
+          totalTurnover: historicalAmount + sapAmount, // Combined turnover
           salesOrderTotal: salesOrderMap[customer.CardCode] || 0,
           latestInvoiceDate: latestInvoiceDateMap[customer.CardCode] || null,
           quotationCount: quotationMap[customer.CardCode] || 0,
         },
+        // Customer classification flags
+        isSAPCustomer: isSAP,
+        isHistoricalCustomer: !isSAP, // Non-SAP format indicates historical
+        isMergedCustomer: historicalAmount > 0 && sapAmount > 0, // Has both types of turnover
+        isPureSAPCustomer: isSAP && historicalAmount === 0 && sapAmount > 0,
+        isPureHistoricalCustomer:
+          !isSAP && historicalAmount > 0 && sapAmount === 0,
       };
     });
 
@@ -2224,15 +2592,63 @@ exports.getCustomersPaginated = async (req, res) => {
             aValue = a.metrics.abandonedCartCount;
             bValue = b.metrics.abandonedCartCount;
             break;
+          case "historicalTurnover":
+            // Sort by historical turnover - customers with historical data first
+            if (
+              a.metrics.historicalTurnover > 0 &&
+              b.metrics.historicalTurnover > 0
+            ) {
+              aValue = a.metrics.historicalTurnover;
+              bValue = b.metrics.historicalTurnover;
+            } else if (
+              a.metrics.historicalTurnover > 0 &&
+              b.metrics.historicalTurnover === 0
+            ) {
+              return -1; // Customer with historical data comes first
+            } else if (
+              a.metrics.historicalTurnover === 0 &&
+              b.metrics.historicalTurnover > 0
+            ) {
+              return 1; // Customer without historical data goes after
+            } else {
+              // Both have no historical data, maintain relative order
+              return 0;
+            }
+            break;
           case "sapTurnover":
+            // Sort by SAP turnover
             aValue = a.metrics.sapTurnover;
             bValue = b.metrics.sapTurnover;
+            break;
+          case "sapTurnoverOnly":
+            // Sort by SAP turnover - customers with SAP data first
+            if (a.metrics.sapTurnover > 0 && b.metrics.sapTurnover > 0) {
+              aValue = a.metrics.sapTurnover;
+              bValue = b.metrics.sapTurnover;
+            } else if (
+              a.metrics.sapTurnover > 0 &&
+              b.metrics.sapTurnover === 0
+            ) {
+              return -1; // Customer with SAP data comes first
+            } else if (
+              a.metrics.sapTurnover === 0 &&
+              b.metrics.sapTurnover > 0
+            ) {
+              return 1; // Customer without SAP data goes after
+            } else {
+              // Both have no SAP data, maintain relative order
+              return 0;
+            }
+            break;
+          case "totalTurnover":
+            // Sort by combined turnover
+            aValue = a.metrics.totalTurnover;
+            bValue = b.metrics.totalTurnover;
             break;
           case "salesOrderTotal":
             aValue = a.metrics.salesOrderTotal;
             bValue = b.metrics.salesOrderTotal;
             break;
-
           case "latestInvoiceDate":
             aValue = a.metrics.latestInvoiceDate
               ? new Date(a.metrics.latestInvoiceDate).getTime()
@@ -2251,7 +2667,12 @@ exports.getCustomersPaginated = async (req, res) => {
             return 0;
         }
 
-        return sortDirection * (aValue - bValue);
+        // For cases where we have aValue and bValue
+        if (aValue !== undefined && bValue !== undefined) {
+          return sortDirection * (aValue - bValue);
+        }
+
+        return 0;
       });
     } else {
       // Default sorting by CardName
@@ -2283,7 +2704,6 @@ exports.getCustomersPaginated = async (req, res) => {
     });
   }
 };
-
 exports.getCustomersPaginated2 = async (req, res) => {
   try {
     // Extract pagination parameters

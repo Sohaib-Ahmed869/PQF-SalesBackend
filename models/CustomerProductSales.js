@@ -14,6 +14,9 @@ const customerProductSalesSchema = new mongoose.Schema(
     year: { type: Number, required: true, index: true },
     dateStored: { type: Date, default: Date.now },
     verified: { type: Boolean, default: false },
+    Historical: { type: Boolean, default: false },
+    mergedFrom: { type: String }, // Original customerId before merge
+    mergeDate: { type: Date },
   },
   {
     timestamps: true,

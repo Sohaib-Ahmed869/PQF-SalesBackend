@@ -48,8 +48,6 @@ async function generateQuotationPDF(quotation, customer) {
       properties: customer ? Object.keys(customer).join(", ") : "none",
     });
 
-    
-
     // Prepare the data for the template
     const data = {
       quotation: {
@@ -70,7 +68,7 @@ async function generateQuotationPDF(quotation, customer) {
       },
       customer,
       companyInfo: {
-        name: "HALAL FOOD SERVICE",
+        name: "Premier Quality Foods",
         address: "32, Rue Raspail",
         city: "La Courneuve",
         zipCode: "93120",
@@ -85,8 +83,7 @@ async function generateQuotationPDF(quotation, customer) {
         swift: "BREDFRPPXXX",
       },
       // We will handle the logo differently
-      logoUrl:
-        "https://imageshfs.s3.ap-southeast-2.amazonaws.com/image-removebg-preview+(1).png",
+      logoUrl: "https://bexbucket.s3.eu-north-1.amazonaws.com/Logo/PQF-22.png",
     };
 
     // Generate HTML from template (inject the logo as base64 directly in the HTML)

@@ -11,6 +11,10 @@ const invoiceSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    Historical: { type: Boolean, default: false },
+    mergedFrom: { type: String }, // Original CardCode before merge
+    mergeDate: { type: Date }, // When the merge occurred
+
     tag: {
       type: String,
       enum: ["Own Company", "External Delivery", "Own Delivery", "None"],
