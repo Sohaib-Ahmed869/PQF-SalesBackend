@@ -66,8 +66,16 @@ const getProductSalesAnalytics = async (req, res) => {
           };
 
     // Get yearly trends
+    const yearlyTrendsMatchStage = {};
+    if (customer) {
+      yearlyTrendsMatchStage.customerId = customer;
+    }
+    if (product) {
+      yearlyTrendsMatchStage.itemId = product;
+    }
+
     const yearlyTrends = await ProductSales.aggregate([
-      { $match: customer ? { customerId: customer } : {} },
+      { $match: yearlyTrendsMatchStage },
       {
         $group: {
           _id: "$year",
@@ -292,17 +300,41 @@ const getProductSalesData = async (req, res) => {
     let salesData;
     let totalCount;
 
-    // If "all years" is selected, combine items by itemId
+    // If "all years" is selected, group by both customerId and itemId (if product filter is applied)
+    // or just by customerId and itemId combination for proper accumulation
     if (!year || year === "all") {
-      // Use aggregation to combine items by itemId
+      let groupByFields;
+
+      // Determine grouping strategy based on filters
+      if (product) {
+        // If product filter is applied, group by customer + item combination
+        groupByFields = {
+          customerId: "$customerId",
+          itemId: "$itemId",
+        };
+      } else if (customer) {
+        // If customer filter is applied, group by customer + item combination
+        groupByFields = {
+          customerId: "$customerId",
+          itemId: "$itemId",
+        };
+      } else {
+        // If no specific filters, group by customer + item combination to show all combinations
+        groupByFields = {
+          customerId: "$customerId",
+          itemId: "$itemId",
+        };
+      }
+
+      // Use aggregation to combine records by customer-item combination
       const aggregationPipeline = [
         { $match: filter },
         {
           $group: {
-            _id: "$itemId",
+            _id: groupByFields,
             itemId: { $first: "$itemId" },
             itemDescription: { $first: "$itemDescription" },
-            customerId: { $first: "$customerId" }, // Take first customer for display
+            customerId: { $first: "$customerId" },
             customerName: { $first: "$customerName" },
             totalAmount: { $sum: "$totalAmount" },
             totalQuantity: { $sum: "$totalQuantity" },
@@ -311,13 +343,13 @@ const getProductSalesData = async (req, res) => {
             grossMargin: {
               $avg: "$grossMargin", // Average margin across all years
             },
-            years: { $addToSet: "$year" }, // Collect all years this item appears in
+            years: { $addToSet: "$year" }, // Collect all years this combination appears in
             totalTransactions: { $sum: 1 },
             // Add fields to show year range
             minYear: { $min: "$year" },
             maxYear: { $max: "$year" },
             // Keep original structure fields but combine them
-            dateStored: { $first: "$dateStored" }, // Take first date for sorting
+            dateStored: { $max: "$dateStored" }, // Take most recent date for sorting
           },
         },
         {
@@ -366,7 +398,7 @@ const getProductSalesData = async (req, res) => {
 
       salesData = await ProductSales.aggregate(aggregationPipeline);
 
-      // Remove MongoDB _id and years array from response, format the data
+      // Format the data
       salesData = salesData.map((item) => ({
         itemId: item.itemId,
         itemDescription: item.itemDescription,
@@ -384,7 +416,7 @@ const getProductSalesData = async (req, res) => {
         dateStored: item.dateStored,
       }));
     } else {
-      // Original logic for specific year
+      // Original logic for specific year - no aggregation needed
       const skip = (page - 1) * limit;
       const sortObject = { [sortBy]: sortOrder };
 
@@ -570,10 +602,83 @@ const getCustomers = async (req, res) => {
     });
   }
 };
+const getItems = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const search = req.query.search || "";
+    const skip = (page - 1) * limit;
 
+    // Build search filter
+    const searchFilter = search
+      ? {
+          $or: [
+            { itemDescription: { $regex: search, $options: "i" } },
+            { itemId: { $regex: search, $options: "i" } },
+          ],
+        }
+      : {};
+
+    // Get unique items from ProductSales
+    const itemsAggregation = await ProductSales.aggregate([
+      {
+        $group: {
+          _id: "$itemId",
+          itemDescription: { $first: "$itemDescription" },
+          totalRevenue: { $sum: "$totalAmount" },
+          totalQuantity: { $sum: "$totalQuantity" },
+          lastTransaction: { $max: "$dateStored" },
+        },
+      },
+      { $match: searchFilter },
+      { $sort: { itemDescription: 1 } },
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [{ $skip: skip }, { $limit: limit }],
+        },
+      },
+    ]);
+
+    const items = itemsAggregation[0].data.map((item) => ({
+      _id: item._id,
+      itemId: item._id,
+      itemDescription: item.itemDescription,
+      totalRevenue: item.totalRevenue,
+      totalQuantity: item.totalQuantity,
+      lastTransaction: item.lastTransaction,
+    }));
+
+    const totalCount = itemsAggregation[0].metadata[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        items,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalRecords: totalCount,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+          limit,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching items:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch items",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
 module.exports = {
   getProductSalesAnalytics,
   getProductSalesData,
   getCustomers,
+  getItems,
   getProductPerformanceComparison,
 };
